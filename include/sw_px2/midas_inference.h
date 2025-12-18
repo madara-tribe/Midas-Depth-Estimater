@@ -14,9 +14,9 @@ public:
     ~MidasInference();
 
     std::vector<float> PreProcess(cv::Mat& iImg);
-    cv::Mat verifyOutput(std::vector<float> output);
-    cv::Mat draw_depth(const cv::Mat& depth_map, int oriW, int oriH);
-    cv::Mat runInference(cv::Mat& img);
+    cv::Mat verifyOutput(std::vector<float> output, std::string pkg_path);
+    cv::Mat draw_depth(const cv::Mat& depth_map, int oriW, int oriH, std::string pkg_path);
+    cv::Mat runInference(cv::Mat& img, std::string pkg_path);
 
 private:
     Ort::SessionOptions sessionOptions;

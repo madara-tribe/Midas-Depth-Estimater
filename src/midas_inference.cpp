@@ -1,4 +1,4 @@
-#include "midas_inference.h"
+#include "sw_px2/midas_inference.h"
 
 
 MidasInference::MidasInference(const std::string& modelPath, bool useCUDA){
@@ -34,36 +34,38 @@ std::vector<float> MidasInference::PreProcess(cv::Mat& iImg) {
     return output;
 }
 
-cv::Mat MidasInference::verifyOutput(std::vector<float> output) {
+cv::Mat MidasInference::verifyOutput(std::vector<float> output, std::string pkg_path) {
     cv::Mat segMat = cv::Mat::zeros(cv::Size(H, W), CV_8U);
-    cv::Mat color_map = cv::Mat::zeros(cv::Size(H, W), CV_8U);
+    //cv::Mat color_map = cv::Mat::zeros(cv::Size(H, W), CV_8U);
     for (int row = 0; row < H; row++) {
         for (int col = 0; col < W; col++) {
             segMat.at<uint8_t>(row, col) = static_cast<uint8_t>(output[row * W + col]);
         }
     }
-    cv::applyColorMap(segMat, color_map, cv::COLORMAP_JET);
-    cv::imwrite("depth_map.png", segMat);
+    // cv::applyColorMap(segMat, color_map, cv::COLORMAP_JET);
+    cv::imwrite(pkg_path + "data/depth_map.png", segMat);
     return segMat;
 }
 
-cv::Mat MidasInference::draw_depth(const cv::Mat& depth_map, int oriW, int oriH) {
-    float min_val = 0;
-    float max_val = 100;
-
-    float range_val = max_val - min_val;
+cv::Mat MidasInference::draw_depth(const cv::Mat& depth_map, int oriW, int oriH, std::string pkg_path) {
+    double min_val, max_val;
+    cv::minMaxLoc(depth_map, &min_val, &max_val);
     std::cout << "min max" << max_val << min_val << std::endl;
-    cv::Mat norm_depth_map = ((depth_map - min_val) / range_val) * 255.0;
+    // Normalize the depth map to [0, 255] based on the computed range
+    cv::Mat norm_depth_map;
+    cv::normalize(depth_map, norm_depth_map, 0, 255, cv::NORM_MINMAX);
+    norm_depth_map.convertTo(norm_depth_map, CV_8U); // Ensure 8-bit image
+    // Invert the depth map (if required for your visualization)
     norm_depth_map = 255 - norm_depth_map;
-    
+
     cv::Mat color_depth;
     cv::applyColorMap(norm_depth_map, color_depth, cv::COLORMAP_JET);
-    cv::resize(color_depth, color_depth, cv::Size(oriW, oriH));
-    cv::imwrite("color_map.jpg", color_depth);
-    return color_depth;
+    cv::resize(norm_depth_map, norm_depth_map, cv::Size(oriW, oriH), 0, 0, cv::INTER_NEAREST);
+    cv::imwrite(pkg_path + "data/depth_map.jpg", color_depth);
+    return norm_depth_map;
 }
 
-cv::Mat MidasInference::runInference(cv::Mat& img) {
+cv::Mat MidasInference::runInference(cv::Mat& img, std::string pkg_path) {
     int inputHeight = img.rows;
     int inputWidth = img.cols;
     int insize = H * W * 3;
@@ -87,8 +89,9 @@ cv::Mat MidasInference::runInference(cv::Mat& img) {
     // Inference
     session->Run(run_options, &input_node_name, &inputTensor, 1U, &output_node_name, &output_tensor, 1U);
 
-    cv::Mat depth_map = verifyOutput(results);
-    cv::Mat color_depth = draw_depth(depth_map, inputWidth, inputHeight);
-    return color_depth;
+    cv::Mat depth_map = verifyOutput(results, pkg_path);
+    cv::Mat norm_depth_map = draw_depth(depth_map, inputWidth, inputHeight, pkg_path);
+    //cv::resize(depth_map, depth_map, cv::Size(inputWidth, inputHeight), 0, 0, cv::INTER_NEAREST);
+    return norm_depth_map;
 }
 
